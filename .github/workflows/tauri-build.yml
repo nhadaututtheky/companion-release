@@ -1,0 +1,135 @@
+name: Tauri Desktop Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (e.g. v0.6.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  build:
+    name: Build (${{ matrix.platform }})
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-latest
+            artifact_name: "companion-windows"
+          - platform: macos-latest
+            artifact_name: "companion-macos"
+          - platform: ubuntu-22.04
+            artifact_name: "companion-linux"
+
+    steps:
+      - name: Checkout companion source
+        uses: actions/checkout@v4
+        with:
+          repository: nhadaututtheky/companion
+          token: ${{ secrets.SOURCE_REPO_TOKEN }}
+          ref: ${{ inputs.tag }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install JS dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Linux deps
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            libgtk-3-dev \
+            libfuse2
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Build Bun server sidecar
+        shell: bash
+        run: |
+          TARGET_TRIPLE=$(rustc -Vv | grep '^host:' | awk '{print $2}')
+          OUTFILE="src-tauri/bun-server-${TARGET_TRIPLE}"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            OUTFILE="${OUTFILE}.exe"
+          fi
+          bun build packages/server/src/index.ts \
+            --compile --target bun --outfile "$OUTFILE"
+          ls -lh src-tauri/bun-server-*
+
+      - name: Build Tauri app
+        shell: bash
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          NO_STRIP: "true"
+        run: cd src-tauri && cargo tauri build
+
+      - name: Upload to release
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ inputs.tag }}"
+          BUNDLE_DIR="src-tauri/target/release/bundle"
+
+          gh release view "$TAG" >/dev/null 2>&1 || \
+            gh release create "$TAG" --title "Companion $TAG" \
+              --notes "## Companion $TAG
+          Download the installer for your platform below.
+          More info: https://companion.theio.vn"
+
+          for f in $(find "$BUNDLE_DIR" \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" \) 2>/dev/null); do
+            echo "Uploading: $(basename $f)"
+            gh release upload "$TAG" "$f" --clobber || true
+          done
+
+          DMG=$(find "$BUNDLE_DIR" -name "*.dmg" | head -1)
+          [ -n "$DMG" ] && cp "$DMG" "Companion_aarch64.dmg" && \
+            gh release upload "$TAG" "Companion_aarch64.dmg" --clobber || true
+
+          MSI=$(find "$BUNDLE_DIR" -name "*.msi" | head -1)
+          [ -n "$MSI" ] && cp "$MSI" "Companion_x64-setup.msi" && \
+            gh release upload "$TAG" "Companion_x64-setup.msi" --clobber || true
+
+          APPIMAGE=$(find "$BUNDLE_DIR" -name "*.AppImage" | head -1)
+          [ -n "$APPIMAGE" ] && cp "$APPIMAGE" "Companion_amd64.AppImage" && \
+            gh release upload "$TAG" "Companion_amd64.AppImage" --clobber || true
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: |
+            src-tauri/target/release/bundle/**/*.msi
+            src-tauri/target/release/bundle/**/*.exe
+            src-tauri/target/release/bundle/**/*.dmg
+            src-tauri/target/release/bundle/**/*.AppImage
+            src-tauri/target/release/bundle/**/*.deb
+          retention-days: 7
+          if-no-files-found: warn
