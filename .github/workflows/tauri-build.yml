@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag (e.g. v0.6.0)"
+        description: "Release tag (e.g. v0.8.0)"
         required: true
         type: string
 
@@ -69,6 +69,15 @@ jobs:
 
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version "^2" --locked
+
+      - name: Build Next.js web export
+        shell: bash
+        run: |
+          cd packages/web
+          bun run build
+          cp -r out ../../src-tauri/web
+          echo "Web export files:"
+          ls -la ../../src-tauri/web/ | head -20
 
       - name: Build Bun server sidecar
         shell: bash
