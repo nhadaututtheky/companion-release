@@ -92,12 +92,18 @@ jobs:
             --compile --target bun --outfile "$OUTFILE"
           ls -lh src-tauri/bun-server-*
 
+      - name: Decode signing key
+        shell: bash
+        run: |
+          echo "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_B64 }}" | base64 -d > /tmp/tauri-signing.key
+          echo "TAURI_SIGNING_PRIVATE_KEY=$(cat /tmp/tauri-signing.key)" >> "$GITHUB_ENV"
+          rm /tmp/tauri-signing.key
+
       - name: Build Tauri app
         shell: bash
         env:
           APPIMAGE_EXTRACT_AND_RUN: "1"
           NO_STRIP: "true"
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: cd src-tauri && cargo tauri build
 
