@@ -14,6 +14,7 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
+  RELEASE_REPO: nhadaututtheky/companion-release
 
 jobs:
   build:
@@ -101,33 +102,34 @@ jobs:
       - name: Upload to release
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ inputs.tag }}"
+          REPO="${{ env.RELEASE_REPO }}"
           BUNDLE_DIR="src-tauri/target/release/bundle"
 
-          gh release view "$TAG" >/dev/null 2>&1 || \
-            gh release create "$TAG" --title "Companion $TAG" \
+          gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1 || \
+            gh release create "$TAG" --repo "$REPO" --title "Companion $TAG" \
               --notes "## Companion $TAG
           Download the installer for your platform below.
           More info: https://companion.theio.vn"
 
           for f in $(find "$BUNDLE_DIR" \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" \) 2>/dev/null); do
             echo "Uploading: $(basename $f)"
-            gh release upload "$TAG" "$f" --clobber || true
+            gh release upload "$TAG" "$f" --repo "$REPO" --clobber || true
           done
 
           DMG=$(find "$BUNDLE_DIR" -name "*.dmg" | head -1)
           [ -n "$DMG" ] && cp "$DMG" "Companion_aarch64.dmg" && \
-            gh release upload "$TAG" "Companion_aarch64.dmg" --clobber || true
+            gh release upload "$TAG" "Companion_aarch64.dmg" --repo "$REPO" --clobber || true
 
           MSI=$(find "$BUNDLE_DIR" -name "*.msi" | head -1)
           [ -n "$MSI" ] && cp "$MSI" "Companion_x64-setup.msi" && \
-            gh release upload "$TAG" "Companion_x64-setup.msi" --clobber || true
+            gh release upload "$TAG" "Companion_x64-setup.msi" --repo "$REPO" --clobber || true
 
           APPIMAGE=$(find "$BUNDLE_DIR" -name "*.AppImage" | head -1)
           [ -n "$APPIMAGE" ] && cp "$APPIMAGE" "Companion_amd64.AppImage" && \
-            gh release upload "$TAG" "Companion_amd64.AppImage" --clobber || true
+            gh release upload "$TAG" "Companion_amd64.AppImage" --repo "$REPO" --clobber || true
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
