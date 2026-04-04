@@ -97,6 +97,8 @@ jobs:
         env:
           APPIMAGE_EXTRACT_AND_RUN: "1"
           NO_STRIP: "true"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: cd src-tauri && cargo tauri build
 
       - name: Upload to release
@@ -114,7 +116,7 @@ jobs:
           Download the installer for your platform below.
           More info: https://companion.theio.vn"
 
-          for f in $(find "$BUNDLE_DIR" \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" \) 2>/dev/null); do
+          for f in $(find "$BUNDLE_DIR" \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.sig" -o -name "*.minisig" \) 2>/dev/null); do
             echo "Uploading: $(basename $f)"
             gh release upload "$TAG" "$f" --repo "$REPO" --clobber || true
           done
