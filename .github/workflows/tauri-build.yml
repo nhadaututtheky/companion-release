@@ -92,16 +92,20 @@ jobs:
             --compile --target bun --outfile "$OUTFILE"
           ls -lh src-tauri/bun-server-*
 
+      - name: Write signing key
+        shell: bash
+        run: echo "$SIGNING_KEY" > "$RUNNER_TEMP/tauri.key"
+        env:
+          SIGNING_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+
       - name: Build Tauri app
         shell: bash
         env:
           APPIMAGE_EXTRACT_AND_RUN: "1"
           NO_STRIP: "true"
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          SIGNING_KEY_FULL: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
-          export TAURI_SIGNING_PRIVATE_KEY=$(echo "$SIGNING_KEY_FULL" | grep -v "^untrusted comment:" | tr -d '\r\n')
-          echo "Key length: ${#TAURI_SIGNING_PRIVATE_KEY}"
+          export TAURI_PRIVATE_KEY_PATH="$RUNNER_TEMP/tauri.key"
           cd src-tauri && cargo tauri build
 
       - name: Upload to release
