@@ -95,9 +95,11 @@ jobs:
       - name: Decode signing key
         shell: bash
         run: |
-          echo "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_B64 }}" | base64 -d > /tmp/tauri-signing.key
-          echo "TAURI_SIGNING_PRIVATE_KEY=$(cat /tmp/tauri-signing.key)" >> "$GITHUB_ENV"
-          rm /tmp/tauri-signing.key
+          KEY=$(echo "${{ secrets.TAURI_SIGNING_PRIVATE_KEY_B64 }}" | base64 -d | tr -d '\r')
+          EOF_DELIM=$(openssl rand -hex 8)
+          echo "TAURI_SIGNING_PRIVATE_KEY<<${EOF_DELIM}" >> "$GITHUB_ENV"
+          echo "$KEY" >> "$GITHUB_ENV"
+          echo "${EOF_DELIM}" >> "$GITHUB_ENV"
 
       - name: Build Tauri app
         shell: bash
