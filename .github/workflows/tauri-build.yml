@@ -97,22 +97,9 @@ jobs:
         env:
           APPIMAGE_EXTRACT_AND_RUN: "1"
           NO_STRIP: "true"
-        run: cd src-tauri && cargo tauri build
-
-      - name: Sign bundles
-        shell: bash
-        env:
-          SIGNING_KEY_RAW: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: |
-          echo "$SIGNING_KEY_RAW" > "$RUNNER_TEMP/tauri.key"
-          BUNDLE_DIR="src-tauri/target/release/bundle"
-          for f in $(find "$BUNDLE_DIR" \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" \) 2>/dev/null); do
-            echo "Signing: $(basename $f)"
-            cargo tauri signer sign -f "$RUNNER_TEMP/tauri.key" -p "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" "$f" || true
-          done
-          echo "Signature files:"
-          find "$BUNDLE_DIR" -name "*.sig" -o -name "*.minisig" 2>/dev/null
+        run: cd src-tauri && cargo tauri build
 
       - name: Upload to release
         shell: bash
@@ -157,5 +144,6 @@ jobs:
             src-tauri/target/release/bundle/**/*.dmg
             src-tauri/target/release/bundle/**/*.AppImage
             src-tauri/target/release/bundle/**/*.deb
+            src-tauri/target/release/bundle/**/*.sig
           retention-days: 7
           if-no-files-found: warn
