@@ -103,7 +103,6 @@ jobs:
           cd src-tauri
           if [[ "$RUNNER_OS" == "Linux" ]]; then
             # Skip AppImage (linuxdeploy broken on GH runners)
-            # Temporarily patch out updater artifacts (no AppImage = no updater target for Linux)
             sed -i 's/"createUpdaterArtifacts":.*/"createUpdaterArtifacts": false,/' tauri.conf.json
             cargo tauri build --bundles deb,rpm
           else
@@ -125,11 +124,18 @@ jobs:
           Download the installer for your platform below.
           More info: https://companion.theio.vn"
 
-          for f in $(find "$BUNDLE_DIR" \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.sig" -o -name "*.minisig" \) 2>/dev/null); do
+          # Upload all build artifacts including updater files (.tar.gz, .zip)
+          for f in $(find "$BUNDLE_DIR" \( \
+            -name "*.msi" -o -name "*.exe" -o -name "*.dmg" \
+            -o -name "*.AppImage" -o -name "*.deb" \
+            -o -name "*.sig" -o -name "*.minisig" \
+            -o -name "*.tar.gz" -o -name "*.zip" \
+          \) 2>/dev/null); do
             echo "Uploading: $(basename $f)"
             gh release upload "$TAG" "$f" --repo "$REPO" --clobber || true
           done
 
+          # Version-less aliases for stable download URLs
           DMG=$(find "$BUNDLE_DIR" -name "*.dmg" | head -1)
           [ -n "$DMG" ] && cp "$DMG" "Companion_aarch64.dmg" && \
             gh release upload "$TAG" "Companion_aarch64.dmg" --repo "$REPO" --clobber || true
@@ -154,5 +160,7 @@ jobs:
             src-tauri/target/release/bundle/**/*.AppImage
             src-tauri/target/release/bundle/**/*.deb
             src-tauri/target/release/bundle/**/*.sig
+            src-tauri/target/release/bundle/**/*.tar.gz
+            src-tauri/target/release/bundle/**/*.zip
           retention-days: 7
           if-no-files-found: warn
