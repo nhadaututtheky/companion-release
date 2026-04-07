@@ -102,8 +102,10 @@ jobs:
         run: |
           cd src-tauri
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            # Skip AppImage (linuxdeploy fails on GH runners), build deb only
-            cargo tauri build --bundles deb
+            # Skip AppImage (linuxdeploy broken on GH runners)
+            # Temporarily patch out updater artifacts (no AppImage = no updater target for Linux)
+            sed -i 's/"createUpdaterArtifacts":.*/"createUpdaterArtifacts": false,/' tauri.conf.json
+            cargo tauri build --bundles deb,rpm
           else
             cargo tauri build
           fi
