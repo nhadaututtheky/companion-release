@@ -90,3 +90,9 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Disable SLSA provenance + SBOM attestation — buildx writes an
+          # extra attestation manifest under a different SHA and the HEAD
+          # dedup check hits 401 when the PAT can only push, not read
+          # cross-manifest. Self-hosted users don't need provenance.
+          provenance: false
+          sbom: false
