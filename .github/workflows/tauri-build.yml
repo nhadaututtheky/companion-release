@@ -190,10 +190,14 @@ jobs:
               --dir /tmp/sigs --clobber 2>/dev/null || echo "WARN: $sig not found"
           done
 
+          # The Windows manifest URL points at the .nsis.zip bundle (line ~212)
+          # so the signature MUST be the .nsis.zip.sig, NOT the .exe.sig.
+          # Previous order (exe.sig preferred, nsis.zip.sig fallback) embedded
+          # the wrong signature into the manifest — Tauri downloaded .nsis.zip
+          # then failed verification against the .exe signature → "Download
+          # failed" with no useful client log. Affected v0.23.0 → v0.31.6.
           WIN_SIG=""
-          [ -f "/tmp/sigs/Companion_${VERSION}_x64-setup.exe.sig" ] && \
-            WIN_SIG=$(cat "/tmp/sigs/Companion_${VERSION}_x64-setup.exe.sig")
-          [ -z "$WIN_SIG" ] && [ -f "/tmp/sigs/Companion_${VERSION}_x64-setup.nsis.zip.sig" ] && \
+          [ -f "/tmp/sigs/Companion_${VERSION}_x64-setup.nsis.zip.sig" ] && \
             WIN_SIG=$(cat "/tmp/sigs/Companion_${VERSION}_x64-setup.nsis.zip.sig")
 
           MAC_SIG=""
