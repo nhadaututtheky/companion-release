@@ -216,8 +216,12 @@ jobs:
             "${BASE}/Companion_${VERSION}_x64-setup.nsis.zip" "$WIN_SIG"
           generate "/tmp/manifests/darwin-aarch64.json" \
             "${BASE}/Companion.app.tar.gz" "$MAC_SIG"
-          generate "/tmp/manifests/linux-x86_64.json" \
-            "${BASE}/Companion_${VERSION}_amd64.deb" ""
+          # Linux: deliberately not generating linux-x86_64.json. The Linux
+          # build runs with `createUpdaterArtifacts: false` (see line ~104)
+          # so no .sig is produced — publishing a manifest with an empty
+          # signature triggered "Update failed" on every Linux app start.
+          # Tauri's updater treats a 404 manifest as "no update available"
+          # which is the honest UX until AppImage + signing is wired in.
 
           echo "=== Manifests ==="
           cat /tmp/manifests/*.json
