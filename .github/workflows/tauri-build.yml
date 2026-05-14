@@ -165,7 +165,15 @@ jobs:
   update-manifests:
     name: Upload update manifests
     needs: build
-    if: success()
+    # Previously `if: success()` — one failed platform (often macOS signing or
+    # a spurious flake) skipped this job entirely, leaving the release without
+    # ANY platform manifest. Auto-update then broke for every user even when
+    # the Windows + Linux installers were sitting right there on the release.
+    # Now we run as long as the matrix wasn't cancelled; the generate-block
+    # below skips platforms whose .sig is missing so we never publish a
+    # manifest with an empty signature (Tauri would reject "Download failed"
+    # with the same opaque error as the bug we are fixing).
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - name: Generate and upload update manifests
@@ -212,10 +220,24 @@ jobs:
               "$VERSION" "$url" "$sig" "$NOTES" "$PUB_DATE" > "$file"
           }
 
-          generate "/tmp/manifests/windows-x86_64.json" \
-            "${BASE}/Companion_${VERSION}_x64-setup.nsis.zip" "$WIN_SIG"
-          generate "/tmp/manifests/darwin-aarch64.json" \
-            "${BASE}/Companion.app.tar.gz" "$MAC_SIG"
+          # Only generate a per-platform manifest when its signature is
+          # present. A manifest with an empty `signature` triggers Tauri's
+          # "Download failed" path on every update check — better to omit
+          # the file so Tauri sees 404 and treats it as "no update for this
+          # platform" (the previous version's manifest, if any, remains the
+          # last-known-good for that platform).
+          if [ -n "$WIN_SIG" ]; then
+            generate "/tmp/manifests/windows-x86_64.json" \
+              "${BASE}/Companion_${VERSION}_x64-setup.nsis.zip" "$WIN_SIG"
+          else
+            echo "Skipping windows-x86_64.json — no Windows .nsis.zip.sig on release"
+          fi
+          if [ -n "$MAC_SIG" ]; then
+            generate "/tmp/manifests/darwin-aarch64.json" \
+              "${BASE}/Companion.app.tar.gz" "$MAC_SIG"
+          else
+            echo "Skipping darwin-aarch64.json — no macOS .app.tar.gz.sig on release"
+          fi
           # Linux: deliberately not generating linux-x86_64.json. The Linux
           # build runs with `createUpdaterArtifacts: false` (see line ~104)
           # so no .sig is produced — publishing a manifest with an empty
@@ -223,12 +245,18 @@ jobs:
           # Tauri's updater treats a 404 manifest as "no update available"
           # which is the honest UX until AppImage + signing is wired in.
 
-          echo "=== Manifests ==="
-          cat /tmp/manifests/*.json
+          if ls /tmp/manifests/*.json >/dev/null 2>&1; then
+            echo "=== Manifests ==="
+            cat /tmp/manifests/*.json
 
-          for f in /tmp/manifests/*.json; do
-            echo "Uploading manifest: $(basename $f)"
-            gh release upload "$TAG" "$f" --repo "$REPO" --clobber || true
-          done
+            for f in /tmp/manifests/*.json; do
+              echo "Uploading manifest: $(basename $f)"
+              gh release upload "$TAG" "$f" --repo "$REPO" --clobber || true
+            done
 
-          echo "Manifests uploaded as release assets"
+            echo "Manifests uploaded as release assets"
+          else
+            echo "No platform signatures available — no manifests uploaded."
+            echo "Auto-update will report 'no update available' for affected"
+            echo "platforms until a follow-up build succeeds."
+          fi
