@@ -313,6 +313,13 @@ jobs:
           git commit -m "chore(landing): sync updater manifests to ${{ inputs.tag }}"
           git push
 
+      - name: Setup Node (wrangler requires >= v22)
+        # bunx wrangler ultimately spawns node to run wrangler; runner default
+        # is Node 20 which wrangler now rejects with exit 1. Pin v22.
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
