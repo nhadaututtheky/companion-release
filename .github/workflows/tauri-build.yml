@@ -293,6 +293,15 @@ jobs:
           done
 
       - name: Commit synced manifests to source repo
+        # continue-on-error: SOURCE_REPO_TOKEN may lack `repo:write` scope (a
+        # common pattern for read-only PATs that just clone). If push fails,
+        # log it but DON'T block CF Pages deploy — the wrangler step uploads
+        # the working tree's landing/ directly (no git dependency). Result:
+        # CF Pages still gets the fresh manifest, source repo's
+        # landing/updates/ just stays behind by one release. Recovery if you
+        # want them in sync: rotate SOURCE_REPO_TOKEN to a PAT with `repo`
+        # (write) scope and remove this continue-on-error.
+        continue-on-error: true
         run: |
           if [ -z "$(git status --porcelain landing/updates/)" ]; then
             echo "No manifest changes — landing/ already in sync"
