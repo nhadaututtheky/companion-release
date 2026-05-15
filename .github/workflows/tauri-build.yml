@@ -260,3 +260,62 @@ jobs:
             echo "Auto-update will report 'no update available' for affected"
             echo "platforms until a follow-up build succeeds."
           fi
+
+  # ── Sync manifests to source landing/ + deploy Cloudflare Pages ────────
+  sync-cf-pages:
+    name: Sync manifests to Cloudflare Pages
+    needs: update-manifests
+    if: ${{ !cancelled() && needs.update-manifests.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout companion source
+        uses: actions/checkout@v4
+        with:
+          repository: nhadaututtheky/companion
+          token: ${{ secrets.SOURCE_REPO_TOKEN }}
+
+      - name: Pull manifests from this release into landing/updates/
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ inputs.tag }}"
+          REPO="${{ env.RELEASE_REPO }}"
+          mkdir -p landing/updates
+          # Pull whichever manifests the previous job actually uploaded.
+          # Missing target = honest 404 → Tauri treats as "no update for
+          # this platform"; do NOT invent or carry stale ones forward.
+          for target in windows-x86_64 darwin-aarch64 darwin-x86_64 linux-x86_64; do
+            gh release download "$TAG" --repo "$REPO" \
+              --pattern "$target.json" \
+              --dir landing/updates --clobber 2>/dev/null \
+              && echo "Pulled $target.json" \
+              || echo "Skip $target.json (not on release)"
+          done
+
+      - name: Commit synced manifests to source repo
+        run: |
+          if [ -z "$(git status --porcelain landing/updates/)" ]; then
+            echo "No manifest changes — landing/ already in sync"
+            exit 0
+          fi
+          git config user.email "ci@companion.theio.vn"
+          git config user.name "Companion CI"
+          git add landing/updates/
+          git commit -m "chore(landing): sync updater manifests to ${{ inputs.tag }}"
+          git push
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Deploy landing to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          cd landing
+          bunx wrangler pages deploy . \
+            --project-name companion-landing \
+            --commit-dirty=true \
+            --branch main
