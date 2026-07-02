@@ -80,17 +80,22 @@ jobs:
           echo "Web export files:"
           ls -la ../../src-tauri/web/ | head -20
 
-      - name: Build Bun server sidecar
+      - name: Build Rust server sidecar
         shell: bash
         run: |
+          # The Bun server was deleted in v0.40.0 — the sidecar is now the native
+          # Rust binary. tauri.conf.json externalBin = "companion-server-rs", so Tauri
+          # resolves src-tauri/companion-server-rs-<target-triple>[.exe] at bundle time.
           TARGET_TRIPLE=$(rustc -Vv | grep '^host:' | awk '{print $2}')
-          OUTFILE="src-tauri/bun-server-${TARGET_TRIPLE}"
+          cargo build --release --manifest-path server-rs/Cargo.toml --bin companion-server-rs
+          BIN="server-rs/target/release/companion-server-rs"
+          OUT="src-tauri/companion-server-rs-${TARGET_TRIPLE}"
           if [[ "$RUNNER_OS" == "Windows" ]]; then
-            OUTFILE="${OUTFILE}.exe"
+            BIN="${BIN}.exe"
+            OUT="${OUT}.exe"
           fi
-          bun build packages/server/src/index.ts \
-            --compile --target bun --outfile "$OUTFILE"
-          ls -lh src-tauri/bun-server-*
+          cp "$BIN" "$OUT"
+          ls -lh src-tauri/companion-server-rs-*
 
       - name: Build Tauri app
         shell: bash
